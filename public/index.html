@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tiny Turbo - toy car racing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14172b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Tiny Turbo: top-down toy car racing with online multiplayer. Play on phones and computers together.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23e8392d'/%3E%3Crect x='6' y='11' width='20' height='10' rx='3' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="menubg"></canvas>
+  <canvas id="game"></canvas>
+
+  <!-- in-race overlay buttons -->
+  <div id="topbtns" class="hidden">
+    <button id="b-snd" class="ibtn" aria-label="Sound">&#9835;</button>
+    <button id="b-pause" class="ibtn" aria-label="Pause">&#10074;&#10074;</button>
+  </div>
+
+  <!-- touch controls -->
+  <div id="touch" class="hidden">
+    <div id="slide" data-ctl="slide"><i id="knob"></i><span>SLIDE TO STEER</span></div>
+    <div class="cluster left" id="steerbtns">
+      <button class="tbtn" data-ctl="left" aria-label="Steer left">&#9664;</button>
+      <button class="tbtn" data-ctl="right" aria-label="Steer right">&#9654;</button>
+    </div>
+    <div class="cluster right">
+      <div class="col lcol"><button class="tbtn item empty" id="itemBtn" data-ctl="item" aria-label="Use item">ITEM</button><button class="tbtn small" data-ctl="drift">DRIFT</button></div>
+      <div class="col">
+        <button class="tbtn brake" data-ctl="brake">BRAKE</button>
+        <button class="tbtn gas" data-ctl="gas">GAS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TITLE -->
+  <section id="s-title" class="screen">
+    <div class="panel title-panel">
+      <canvas id="logo" width="10" height="10"></canvas>
+      <p class="tag">Toy cars. Big chaos. Race your friends - phones and PCs together!</p>
+      <div id="invite" class="invite hidden">You're invited to room <b id="inv-code"></b> &mdash; pick your car and hit JOIN!</div>
+      <div class="row center">
+        <label class="lbl">Name <input id="in-name" maxlength="14" autocomplete="off" autocapitalize="words" spellcheck="false"></label>
+      </div>
+      <div class="picker">
+        <div id="sw-color" class="swatches" aria-label="Car color"></div>
+        <div id="sw-style" class="styles" aria-label="Car style"></div>
+      </div>
+      <div class="menu-btns">
+        <button id="b-friends" class="btn big green">PLAY WITH FRIENDS<small>Make a room, share the link</small></button>
+        <div class="joinrow">
+          <input id="in-code" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text">
+          <button id="b-join" class="btn big blue">JOIN</button>
+        </div>
+        <button id="b-solo" class="btn big orange">RACE VS BOTS<small>Solo: no one else needed, works offline</small></button>
+        <div class="row center gap diffrow"><span class="small">BOT LEVEL</span><div class="seg" id="t-diff"><button data-v="0">EASY</button><button data-v="1">MEDIUM</button><button data-v="2">HARD</button></div></div>
+        <div class="row center gap">
+          <button id="b-help" class="btn">HOW TO PLAY</button>
+          <button id="b-settings" class="btn">SETTINGS</button>
+        </div>
+      </div>
+      <div class="foot">Made by John &middot; <span id="verline">v1.0</span></div>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="s-lobby" class="screen hidden">
+    <div class="panel lobby-panel">
+      <div class="lobby-head">
+        <div>
+          <div class="small">ROOM CODE</div>
+          <div id="l-code" class="bigcode">----</div>
+        </div>
+        <div class="lobby-share" id="l-share">
+          <input id="l-link" readonly>
+          <button id="b-copy" class="btn blue">COPY LINK</button>
+          <button id="b-share" class="btn green hidden">SHARE</button>
+        </div>
+      </div>
+      <div class="lobby-grid">
+        <div class="col-a">
+          <h3>RACERS <span id="l-count"></span></h3>
+          <ul id="l-players" class="plist"></ul>
+          <div class="me-edit">
+            <div id="l-colors" class="swatches mini"></div>
+            <div id="l-styles" class="styles mini"></div>
+          </div>
+        </div>
+        <div class="col-b">
+          <h3>TRACK</h3>
+          <div id="l-tracks" class="tracks"></div>
+          <div class="opts" id="l-opts">
+            <div class="opt"><span>MODE</span>
+              <div class="seg" id="o-mode"><button data-v="race">RACE</button><button data-v="duel">DUEL</button></div>
+            </div>
+            <div class="opt" id="opt-laps"><span>LAPS</span>
+              <div class="stepper"><button id="laps-dn">&minus;</button><b id="o-laps">3</b><button id="laps-up">+</button></div>
+            </div>
+            <div class="opt"><span>ITEMS</span>
+              <div class="seg" id="o-items"><button data-v="1">ON</button><button data-v="0">OFF</button></div>
+            </div>
+            <div class="opt"><span>BOT LEVEL</span>
+              <div class="seg" id="o-diff"><button data-v="0">EASY</button><button data-v="1">MEDIUM</button><button data-v="2">HARD</button></div>
+            </div>
+            <div class="opt"><span>CARS ON GRID</span>
+              <div class="stepper"><button id="fill-dn">&minus;</button><b id="o-fill">4</b><button id="fill-up">+</button></div>
+            </div>
+          </div>
+          <p id="l-modehelp" class="small mh"></p>
+        </div>
+      </div>
+      <div class="lobby-foot">
+        <button id="b-leave" class="btn">LEAVE</button>
+        <div class="spacer"></div>
+        <div id="l-msg" class="small"></div>
+        <button id="b-ready" class="btn big green hidden">READY!</button>
+        <button id="b-start" class="btn big orange hidden">START RACE</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="s-results" class="screen hidden clear">
+    <div class="panel results-panel">
+      <h2 id="r-title">RESULTS</h2>
+      <ol id="r-list" class="rlist"></ol>
+      <div class="lobby-foot">
+        <button id="r-leave" class="btn">LEAVE</button>
+        <div class="spacer"></div>
+        <div id="r-msg" class="small"></div>
+        <button id="r-lobby" class="btn blue">LOBBY</button>
+        <button id="r-again" class="btn big orange">RACE AGAIN</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAUSE -->
+  <section id="s-pause" class="screen hidden clear">
+    <div class="panel small-panel">
+      <h2>PAUSED</h2>
+      <p id="p-note" class="small"></p>
+      <button id="p-resume" class="btn big green">RESUME</button>
+      <div class="row center gap">
+        <button id="p-sfx" class="btn">SOUND: ON</button>
+        <button id="p-music" class="btn">MUSIC: ON</button>
+      </div>
+      <button id="p-leave" class="btn red">LEAVE RACE</button>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="s-settings" class="screen hidden">
+    <div class="panel small-panel">
+      <h2>SETTINGS</h2>
+      <div class="setgrid">
+        <span>Sound effects</span><div class="seg" id="st-sfx"><button data-v="1">ON</button><button data-v="0">OFF</button></div>
+        <span>Music</span><div class="seg" id="st-music"><button data-v="1">ON</button><button data-v="0">OFF</button></div>
+        <span>Touch steering</span><div class="seg" id="st-steer"><button data-v="buttons">BUTTONS</button><button data-v="slide">SLIDE</button></div>
+        <span>Auto gas (touch)</span><div class="seg" id="st-auto"><button data-v="0">OFF</button><button data-v="1">ON</button></div>
+        <span>Camera (race)</span><div class="seg" id="st-cam"><button data-v="me">MY CAR</button><button data-v="leader">LEADER</button></div>
+        <span>Graphics</span><div class="seg" id="st-gfx"><button data-v="auto">AUTO</button><button data-v="high">HIGH</button><button data-v="low">LOW</button></div>
+        <span>Show FPS</span><div class="seg" id="st-fps"><button data-v="0">OFF</button><button data-v="1">ON</button></div>
+      </div>
+      <button id="st-back" class="btn big green">BACK</button>
+    </div>
+  </section>
+
+  <!-- HELP -->
+  <section id="s-help" class="screen hidden">
+    <div class="panel help-panel">
+      <h2>HOW TO PLAY</h2>
+      <div class="helpgrid">
+        <div>
+          <h4>COMPUTER</h4>
+          <p><b>Arrows / WASD</b> steer, gas, brake<br><b>Space / Shift</b> drift (handbrake)<br><b>Esc</b> pause<br><b>Gamepad:</b> stick steer, RT/A gas, LT/B brake, X drift</p>
+          <h4>PHONE / TABLET</h4>
+          <p>Hold <b>GAS</b> and use <b>&#9664; &#9654;</b> to steer (or switch to slide-steer in Settings). Tap <b>DRIFT</b> in corners. Turn your phone sideways!</p>
+        </div>
+        <div>
+          <h4>MODES</h4>
+          <p><b>RACE:</b> classic laps. First across the line wins.<br><b>DUEL:</b> stay close to the leader! Fall too far behind and you're out. Last car racing scores a point.</p>
+          <h4>ON THE TRACK</h4>
+          <p><span class="dot" style="background:#ffd23f"></span> Boost pads speed you up<br><span class="dot" style="background:#222"></span> Oil makes you spin<br><span class="dot" style="background:#4aa8ff"></span> Water slows you down<br><span class="dot" style="background:#e0a050"></span> Ramps launch you over gaps</p>
+        </div>
+      </div>
+      <button id="h-back" class="btn big green">GOT IT</button>
+    </div>
+  </section>
+
+  <div id="toast" class="hidden"></div>
+  <div id="reconnect" class="overlay hidden"><div class="panel small-panel"><h2>CONNECTION LOST</h2><p id="rc-msg">Reconnecting...</p><button id="rc-leave" class="btn">GIVE UP</button></div></div>
+  <div id="rotate" class="hidden">&#8635; Turn your phone sideways for a better view <button id="rot-x">OK</button></div>
+  <div id="loading" class="overlay hidden"><div class="panel small-panel"><h2>LOADING...</h2></div></div>
+</div>
+<noscript>Tiny Turbo needs JavaScript.</noscript>
+<script src="js/sim.js"></script>
+<script src="js/tracks.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/items.js"></script>
+<script src="js/room.js"></script>
+<script src="js/client.js"></script>
+<script src="js/gfx.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/render.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

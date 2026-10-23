@@ -1,0 +1,24 @@
+{
+  "name": "tiny-turbo",
+  "version": "1.0.0",
+  "description": "Tiny Turbo - old-school top-down toy car racing with online multiplayer (desktop + mobile browsers).",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node test/run-all.js",
+    "test:sim": "node test/sim.test.js",
+    "test:net": "node test/net.test.js",
+    "test:mobile": "node test/mobile.test.js",
+    "preview-tracks": "node tools/preview-tracks.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0"
+  },
+  "license": "MIT"
+}
