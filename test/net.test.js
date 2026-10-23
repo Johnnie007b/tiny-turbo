@@ -105,7 +105,7 @@ async function until(fn, ms, label) { const t0 = Date.now(); while (Date.now() -
   check('client prediction error small (avg < 4 units)', avgErr.every((e) => e < 4), 'avg ' + avgErr.map((e) => e.toFixed(2)).join(','));
   console.log('   max prediction error', st.map((s) => s.maxErr.toFixed(1)).join(','), 'hard resets', st.map((s) => s.resets).join(','));
   // render-state sample sanity
-  check('snapshots carry item state (it + row[19])', !!bots[0].client.last.it && bots[0].client.last.c.every((r) => r.length >= 20), JSON.stringify(Object.keys(bots[0].client.last.it || {})));
+  check('snapshots carry item state + drift charge (row[19], row[20])', !!bots[0].client.last.it && bots[0].client.last.c.every((r) => r.length === 21 && typeof r[20] === 'number'), JSON.stringify(Object.keys(bots[0].client.last.it || {})));
   const pickEv = bots[0].events.filter((e) => e[0] === 'pick').length, fireEv = bots[0].events.filter((e) => e[0] === 'fire').length;
   check('pick events delivered to clients', pickEv >= 1, pickEv); check('humans used items via the u input flag', bots.reduce((n, b) => n + (b.used || 0), 0) >= 1 && fireEv >= 1, 'inputs=' + bots.map((b) => b.used || 0) + ' fire events=' + fireEv);
   { const out = []; bots[0].client.sampleMissiles(out); check('sampleMissiles runs', Array.isArray(out)); }

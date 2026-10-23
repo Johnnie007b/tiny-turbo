@@ -4,7 +4,7 @@
   const TT = g.TT || (g.TT = {});
   const keys = new Set();
   const out = { st: 0, g: 0, b: 0, d: 0, u: 0 };
-  let useLatch = 0, usePrev = false;
+  let useLatch = 0, usePrev = false, useTap = false;
   const touch = { pressed: new Set(), slide: null, slideSt: 0 };
   const cfg = { steerMode: 'buttons', autoGas: false, enabled: false, onPause: null, onAnyKey: null };
   let touchRoot = null, slideKnob = null;
@@ -14,7 +14,7 @@
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if (cfg.enabled && GAME_KEYS.has(e.code)) e.preventDefault();
     if (e.repeat) return;
-    keys.add(e.code);
+    keys.add(e.code); if (e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'KeyX' || e.code === 'Enter') useTap = true; // a very quick tap still counts
     if (cfg.enabled && (e.code === 'Escape' || e.code === 'KeyP') && cfg.onPause) cfg.onPause();
     if (cfg.onAnyKey) cfg.onAnyKey(e);
   });
@@ -88,10 +88,10 @@
     if (touch.pressed.has('item')) use = 1;
     if (cfg.autoGas && cfg.enabled) gas = 1;
     out.st = Math.max(-1, Math.min(1, st)); out.g = gas; out.b = brk; out.d = drift;
-    if (use && !usePrev) useLatch = 4; usePrev = !!use; if (useLatch > 0) { useLatch--; use = 1; }
+    if ((use && !usePrev) || useTap) useLatch = 4; useTap = false; usePrev = !!use; if (useLatch > 0) { useLatch--; use = 1; }
     out.u = use;
     return out;
   }
   function anyPadConnected() { try { return Array.from(navigator.getGamepads ? navigator.getGamepads() : []).some((p) => p && p.connected); } catch (e) { return false; } }
-  TT.input = { poll, cfg, bindTouch, touch, anyPadConnected, reset() { keys.clear(); touch.pressed.clear(); touch.slide = null; setPressedClasses(); } };
+  TT.input = { poll, last: out, cfg, bindTouch, touch, anyPadConnected, reset() { keys.clear(); touch.pressed.clear(); touch.slide = null; setPressedClasses(); } };
 })(window);

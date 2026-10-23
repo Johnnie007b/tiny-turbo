@@ -5,6 +5,7 @@
   const G = TT.gfx;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const TAU = Math.PI * 2;
+  const CS = (TT.sim && TT.sim.P && TT.sim.P.CAR_SCALE) || 1; // cars are drawn at this scale (matches collision size)
 
   /* ---------------------------------------------------------------- pattern tiles */
   function tile(size, fn) { const c = G.mk(size, size); const x = c.getContext('2d'); fn(x, size); return c; }
@@ -54,7 +55,7 @@
       x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(5, 5, s / 2 - 12, 4); x.fillRect(s / 2 + 5, s / 2 + 5, s / 2 - 12, 4);
     }),
     tubwater: () => tile(160, (x, s) => {
-      const gr = x.createLinearGradient(0, 0, s, s); gr.addColorStop(0, '#bfe9f8'); gr.addColorStop(1, '#a9dcf2'); x.fillStyle = gr; x.fillRect(0, 0, s, s);
+      x.fillStyle = '#b4e2f5'; x.fillRect(0, 0, s, s); /* flat: a gradient here made visible tile seams */
       const R = G.rng(44); x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = 2;
       for (let i = 0; i < 9; i++) { const y = (i + 0.5) * s / 9; x.beginPath(); for (let px = 0; px <= s; px += 8) { const yy = y + Math.sin(px / s * TAU * 2 + i) * 4; px === 0 ? x.moveTo(px, yy) : x.lineTo(px, yy); } x.stroke(); }
       for (let i = 0; i < 9; i++) { const px = R() * s, py = R() * s, r = 3 + R() * 7; x.strokeStyle = 'rgba(255,255,255,.7)'; x.lineWidth = 1.2; x.beginPath(); x.arc(px, py, r, 0, TAU); x.stroke(); x.fillStyle = 'rgba(255,255,255,.25)'; x.fill(); x.fillStyle = 'rgba(255,255,255,.8)'; x.beginPath(); x.arc(px - r * 0.3, py - r * 0.3, r * 0.22, 0, TAU); x.fill(); }
@@ -125,6 +126,7 @@
     x.setTransform(res, 0, 0, res, -b.x0 * res, -b.y0 * res);
     const B = { x0: b.x0, y0: b.y0, w: bw, h: bh, res };
     (THEMES[T.theme] || THEMES.sandbox)(x, T, B);
+    if (TT.decor) { try { TT.decor.place(x, T, B, T.theme); } catch (e) { if (g.console) console.warn('decor', e); } }
     // direction chevrons
     x.save(); x.strokeStyle = 'rgba(255,255,255,.2)'; x.lineWidth = 5; x.lineCap = 'round'; x.lineJoin = 'round';
     for (let s = 260; s < T.L - 100; s += 430) { const p = T.at(s); x.save(); x.translate(p.x, p.y); x.rotate(p.a); x.beginPath(); x.moveTo(-9, -16); x.lineTo(7, 0); x.lineTo(-9, 16); x.stroke(); x.restore(); }
@@ -191,7 +193,7 @@
     }
     clearDecals() { if (this.dctx) this.dctx.clearRect(0, 0, this.decal.width, this.decal.height); this.parts.length = 0; this.prev.clear(); this.airMax.clear(); }
     w2s(x, y) { const c = this.cam; return [this.W / 2 + (x - c.x) * c.sc, this.H / 2 + (y - c.y) * c.sc]; }
-    burst(x, y, kind, n, ang, spread) {
+    burst(x, y, kind, n, ang, spread, col) {
       if (this.lowFx) n = Math.ceil(n / 2);
       const T = this.theme; const d = DUST[T] || DUST.sandbox;
       for (let i = 0; i < n; i++) {
@@ -204,7 +206,7 @@
         else if (kind === 'confetti') p = { x, y, vx: Math.cos(a) * sp * 2, vy: Math.sin(a) * sp * 2, life: 0.9 + Math.random() * 0.8, r0: 3, r1: 2.5, col: G.CAR_COLORS[(Math.random() * 12) | 0].c, sq: 1 };
         else if (kind === 'boom') p = { x, y, vx: Math.cos(a) * sp * 1.4, vy: Math.sin(a) * sp * 1.4, life: 0.45 + Math.random() * 0.3, r0: 5, r1: 1, col: ['#ffd23f', '#ff7a1a', '#ffffff'][(Math.random() * 3) | 0] };
         else p = { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.4, r0: 2, r1: 0.5, col: '#fff' };
-        p.max = p.life; p.al = p.al || 1; this.parts.push(p);
+        if (col) p.col = col; p.r0 *= CS; p.r1 *= CS; p.max = p.life; p.al = p.al || 1; this.parts.push(p);
       }
     }
     updateParts(dt) {
@@ -219,17 +221,19 @@
         const cs = Math.cos(c.a), sn = Math.sin(c.a); const sp = Math.hypot(c.vx, c.vy);
         const lat = -c.vx * sn + c.vy * cs; const air = c.tA > 0 || c.tF > 0;
         let pv = this.prev.get(c.id); if (!pv) { pv = { has: false, lx: 0, ly: 0, rx: 0, ry: 0 }; this.prev.set(c.id, pv); }
-        const lx = c.x - cs * 7.5 + sn * 6.2, ly = c.y - sn * 7.5 - cs * 6.2, rx = c.x - cs * 7.5 - sn * 6.2, ry = c.y - sn * 7.5 + cs * 6.2;
-        const sliding = !air && sp > 60 && Math.abs(lat) > 62;
+        const bo = 9.6 * CS, so = 7.6 * CS; const lx = c.x - cs * bo + sn * so, ly = c.y - sn * bo - cs * so, rx = c.x - cs * bo - sn * so, ry = c.y - sn * bo + cs * so;
+        const dc = c.dc || 0; const sliding = !air && sp > 60 && (Math.abs(lat) > 62 || dc > 0.2);
+        const tcol = dc >= 2.1 ? '#d27bff' : dc >= 1.3 ? '#ff9a2a' : dc >= 0.6 ? '#4db8ff' : null;
         if (sliding && pv.has && sk) {
-          sk.strokeStyle = SKID[this.theme] || SKID.sandbox; sk.lineWidth = 2.6 * dres;
+          sk.strokeStyle = SKID[this.theme] || SKID.sandbox; sk.lineWidth = 3.2 * CS * dres;
           sk.beginPath(); sk.moveTo((pv.lx - b.x0) * dres, (pv.ly - b.y0) * dres); sk.lineTo((lx - b.x0) * dres, (ly - b.y0) * dres); sk.moveTo((pv.rx - b.x0) * dres, (pv.ry - b.y0) * dres); sk.lineTo((rx - b.x0) * dres, (ry - b.y0) * dres); sk.stroke();
-          if (Math.random() < 0.5) this.burst(lx, ly, 'puff', 1, c.a + Math.PI, 1.2);
-          if (Math.random() < 0.5) this.burst(rx, ry, 'puff', 1, c.a + Math.PI, 1.2);
+          if (Math.random() < 0.45) this.burst(lx, ly, 'puff', 1, c.a + Math.PI, 1.2);
+          if (Math.random() < 0.45) this.burst(rx, ry, 'puff', 1, c.a + Math.PI, 1.2);
+          if (tcol) { this.burst(lx, ly, 'spark', 1, c.a + Math.PI + 0.6, 1.2, tcol); this.burst(rx, ry, 'spark', 1, c.a + Math.PI - 0.6, 1.2, tcol); }
         }
         pv.has = sliding; pv.lx = lx; pv.ly = ly; pv.rx = rx; pv.ry = ry;
-        if (!air && c.tB > 0) { const n = this.lowFx ? 1 : 2; for (let i = 0; i < n; i++) { this.parts.push({ x: c.x - cs * 16, y: c.y - sn * 16, vx: -cs * 170 + (Math.random() - 0.5) * 50 + c.vx * 0.3, vy: -sn * 170 + (Math.random() - 0.5) * 50 + c.vy * 0.3, life: 0.22, max: 0.22, r0: 4.5, r1: 0.8, col: Math.random() < 0.5 ? '#ffb21a' : '#fff1a0', al: 0.95 }); } if (this.parts.length > this.maxParts) this.parts.splice(0, this.parts.length - this.maxParts); }
-        if (!air && c.tW > 0.2 && sp > 120 && Math.random() < 0.5) this.burst(c.x - cs * 6, c.y - sn * 6, 'splash', 1, c.a + Math.PI, 1.6);
+        if (!air && c.tB > 0) { const n = this.lowFx ? 1 : 2; for (let i = 0; i < n; i++) { this.parts.push({ x: c.x - cs * 16 * CS, y: c.y - sn * 16 * CS, vx: -cs * 170 + (Math.random() - 0.5) * 50 + c.vx * 0.3, vy: -sn * 170 + (Math.random() - 0.5) * 50 + c.vy * 0.3, life: 0.22, max: 0.22, r0: 4.5 * CS, r1: 0.8, col: Math.random() < 0.5 ? '#ffb21a' : '#fff1a0', al: 0.95 }); } if (this.parts.length > this.maxParts) this.parts.splice(0, this.parts.length - this.maxParts); }
+        if (!air && c.tW > 0.2 && sp > 120 && Math.random() < 0.5) this.burst(c.x - cs * 8 * CS, c.y - sn * 8 * CS, 'splash', 1, c.a + Math.PI, 1.6);
         if (!air && T.edge === 'rough' && sp > 140 && Math.random() < 0.3) { const q = this.roughCheck && this.roughCheck(c); if (q) this.burst(lx, ly, 'puff', 1, c.a + Math.PI, 1); }
         // airMax tracking
         if (c.tA > 0) { const m = this.airMax.get(c.id) || 0; if (c.tA > m) this.airMax.set(c.id, c.tA); } else if (this.airMax.has(c.id)) this.airMax.delete(c.id);
@@ -274,7 +278,7 @@
         const pk = this._pk; for (let i = 0; i < pk.length; i++) {
           const p = pk[i]; if (it.pk & (1 << i)) continue; if (p.x < vx0 - 30 || p.x > vx1 + 30 || p.y < vy0 - 30 || p.y > vy1 + 30) continue;
           const bob = Math.sin(t * 3 + i) * 1.5, rot = Math.sin(t * 2 + i * 1.7) * 0.25;
-          ctx.save(); ctx.translate(p.x, p.y); ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(2, 7, 11, 5, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+          ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1.25, 1.25); ctx.globalAlpha = 0.28; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(2, 8, 11, 5, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
           ctx.translate(0, -4 + bob); ctx.rotate(rot);
           const gr = ctx.createLinearGradient(-11, -11, 11, 11); gr.addColorStop(0, '#ffe66b'); gr.addColorStop(0.5, '#ff7ad9'); gr.addColorStop(1, '#6aa8ff');
           ctx.fillStyle = gr; ctx.strokeStyle = '#10121f'; ctx.lineWidth = 2; G.rr(ctx, -10, -10, 20, 20, 4); ctx.fill(); ctx.stroke();
@@ -293,7 +297,7 @@
       for (const c of airb) this.drawCar(c, f.time);
       if (f.missiles) for (const m of f.missiles) {
         if (m.x < vx0 - 40 || m.x > vx1 + 40 || m.y < vy0 - 40 || m.y > vy1 + 40) continue;
-        ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(m.a);
+        ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(m.a); ctx.scale(1.3, 1.3);
         ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ctx.fillRect(-9, -2, 18, 6); ctx.globalAlpha = 1;
         const fl = 7 + Math.random() * 5; ctx.fillStyle = '#ff7a1a'; ctx.beginPath(); ctx.moveTo(-8, -3); ctx.lineTo(-8 - fl, 0); ctx.lineTo(-8, 3); ctx.fill(); ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.moveTo(-8, -1.5); ctx.lineTo(-8 - fl * 0.55, 0); ctx.lineTo(-8, 1.5); ctx.fill();
         ctx.fillStyle = '#e8ecf6'; ctx.strokeStyle = '#10121f'; ctx.lineWidth = 1.5; G.rr(ctx, -9, -3.6, 16, 7.2, 3); ctx.fill(); ctx.stroke();
@@ -302,6 +306,7 @@
         ctx.restore();
         if (!this.lowFx && Math.random() < 0.8) this.burst && this.burst(m.x - Math.cos(m.a) * 12, m.y - Math.sin(m.a) * 12, 'puff', 1);
       }
+      this.drawOverlay(f.dt || 0.016);
       return { vx0, vy0, vx1, vy1 };
     }
     drawParts() {
@@ -320,13 +325,34 @@
       if (c.tF > 0) { const p = 1 - clamp(c.tF / 0.95, 0, 1); sc = 1 - p * 0.9; rot += p * 6; alpha = 1 - p * 0.5; }
       if (c.tI > 0 && Math.floor(c.tI * 14) % 2) alpha *= 0.4;
       if (c.out) alpha *= 0.35;
+      const k = sc * CS;
       ctx.save(); ctx.translate(c.x, c.y);
-      if (c.tF <= 0) { // shadow
-        ctx.save(); ctx.translate(2 + h * 12, 3 + h * 18); ctx.rotate(c.a); ctx.globalAlpha = 0.3 * (1 - h * 0.45) * alpha; ctx.fillStyle = '#000'; G.rr(ctx, -15 * sc, -8 * sc, 30 * sc, 16 * sc, 5); ctx.fill(); ctx.restore();
+      if (c.tF <= 0) { // soft cached shadow, drifts away from the car while airborne
+        const sh = G.carShadow(c.style); ctx.save(); ctx.translate((2.4 + h * 12) * CS, (3.6 + h * 18) * CS); ctx.rotate(c.a); ctx.globalAlpha = (0.55 - h * 0.25) * alpha; const q = CS * (1 + h * 0.1);
+        ctx.drawImage(sh.cv, -sh.w / 2 * q, -sh.h / 2 * q, sh.w * q, sh.h * q); ctx.restore();
       }
-      ctx.rotate(rot); ctx.scale(sc, sc); ctx.globalAlpha = alpha;
+      ctx.rotate(rot); ctx.scale(k, k); ctx.globalAlpha = alpha;
+      // slight body squash on hard braking / boost stretch looks lively
+      if (c.tB > 0) ctx.scale(1.06, 0.97);
       ctx.drawImage(spr.cv, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+      if (c.hitT > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = clamp(c.hitT * 3, 0, 0.7); ctx.drawImage(spr.cv, -spr.w / 2, -spr.h / 2, spr.w, spr.h); ctx.globalCompositeOperation = 'source-over'; }
       ctx.restore(); ctx.globalAlpha = 1;
+    }
+    // screen-space overlay: speed lines while boosting/fast, impact flash vignette
+    drawOverlay(dt) {
+      const ctx = this.ctx, W = this.cv.width, H = this.cv.height; ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const sf = this.speedFx || 0;
+      if (sf > 0.02 && !this.lowFx) {
+        ctx.save(); ctx.globalAlpha = Math.min(0.5, sf * 0.5); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, W / 700); ctx.lineCap = 'round'; ctx.beginPath();
+        const cx = W / 2, cy = H / 2, n = 16, t = performance.now() / 1000;
+        for (let i = 0; i < n; i++) { const a = (i / n) * TAU + Math.sin(i * 12.9) * 0.2, u = ((t * 2.2 + i * 0.37) % 1), r0 = Math.min(W, H) * (0.46 + 0.22 * u), r1 = r0 + Math.min(W, H) * (0.1 + 0.18 * sf); ctx.moveTo(cx + Math.cos(a) * r0 * 1.25, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * r1 * 1.25, cy + Math.sin(a) * r1); }
+        ctx.stroke(); ctx.restore();
+      }
+      if (this.flash > 0.01) {
+        const gr = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.72); const col = this.flashCol || '255,60,40';
+        gr.addColorStop(0, 'rgba(' + col + ',0)'); gr.addColorStop(1, 'rgba(' + col + ',' + (this.flash * 0.55).toFixed(3) + ')'); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+        this.flash = Math.max(0, this.flash - dt * 2.8);
+      }
     }
   }
   TT.render = { Renderer, THEMES: Object.keys(THEMES), bake, bakeMini, TILES };

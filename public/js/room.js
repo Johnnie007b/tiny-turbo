@@ -13,7 +13,7 @@
   const MAX_CARS = 8;
   const PH = { LOBBY: 0, COUNTDOWN: 1, RACING: 2, ROUNDEND: 3, RESULTS: 4 };
   const BOT_NAMES = ['Zippy', 'Turbo Ted', 'Pixel', 'Crumb', 'Nova', 'Sprocket', 'Dash', 'Bolt', 'Mango', 'Pebble', 'Gizmo', 'Waffle'];
-  const NUM_COLORS = 12;
+  const NUM_COLORS = 12, NUM_STYLES = 6;
   const trackCache = {};
   function getTrack(i) { i = clamp(i | 0, 0, DEFS.length - 1); return trackCache[i] || (trackCache[i] = S.buildTrack(DEFS[i])); }
   const r1 = (v) => Math.round(v * 10) / 10, r2 = (v) => Math.round(v * 100) / 100, r3 = (v) => Math.round(v * 1000) / 1000;
@@ -43,7 +43,7 @@
     join(pid, info, sendWelcome) {
       info = info || {};
       const p = {
-        pid, name: cleanName(info.name), color: clamp(info.color | 0, 0, NUM_COLORS - 1), style: clamp(info.style | 0, 0, 3), ready: false, conn: true,
+        pid, name: cleanName(info.name), color: clamp(info.color | 0, 0, NUM_COLORS - 1), style: clamp(info.style | 0, 0, NUM_STYLES - 1), ready: false, conn: true,
         token: info.token || Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2), carId: -1, q: [], last: { st: 0, g: 0, b: 0, d: 0 }, ack: 0, lastSeq: 0,
         rematch: false, spec: this.phase !== PH.LOBBY, dcAt: 0
       };
@@ -87,7 +87,7 @@
       switch (m.t) {
         case 'i': this.onInput(p, m); break;
         case 'prof':
-          if (this.phase === PH.LOBBY || p.spec) { if (m.name != null) p.name = cleanName(m.name); if (m.color != null) p.color = clamp(m.color | 0, 0, NUM_COLORS - 1); if (m.style != null) p.style = clamp(m.style | 0, 0, 3); this.pushRoom(); }
+          if (this.phase === PH.LOBBY || p.spec) { if (m.name != null) p.name = cleanName(m.name); if (m.color != null) p.color = clamp(m.color | 0, 0, NUM_COLORS - 1); if (m.style != null) p.style = clamp(m.style | 0, 0, NUM_STYLES - 1); this.pushRoom(); }
           break;
         case 'ready': if (this.phase === PH.LOBBY) { p.ready = !!m.v; this.pushRoom(); } break;
         case 'cfg':
@@ -152,7 +152,7 @@
       let bi = this.seed % BOT_NAMES.length;
       for (let i = 0; i < botCount; i++) {
         let color = 0; while (used.has(color) && used.size < NUM_COLORS) color++; used.add(color);
-        entries.push({ bot: { name: BOT_NAMES[(bi++) % BOT_NAMES.length], color, style: i % 4 } });
+        entries.push({ bot: { name: BOT_NAMES[(bi++) % BOT_NAMES.length], color, style: (i * 5 + 1) % NUM_STYLES } });
       }
       // shuffle grid
       const rnd = S.mulberry32((Math.random() * 1e9) | 0);
@@ -327,7 +327,7 @@
       const c = this.cars.map((c) => {
         const p = c.bot ? null : [...this.players.values()].find((x) => x.carId === c.id);
         const flags = (c.out ? 1 : 0) | (c.fin ? 2 : 0) | ((c.bot || c.disc) ? 4 : 0);
-        return [c.id, r1(c.x), r1(c.y), r3(c.a), r1(c.vx), r1(c.vy), r2(c.st), r2(c.sw), r2(Math.max(0, c.tB)), r2(Math.max(0, c.tO)), r2(Math.max(0, c.tA)), r2(Math.max(0, c.tF)), r2(Math.max(0, c.tI)), r1(c.prog), flags | (c.fin << 4), p ? p.ack : 0, c.pts, r2(c.tW), r1(c.outT * 100) / 100, c.item | 0];
+        return [c.id, r1(c.x), r1(c.y), r3(c.a), r1(c.vx), r1(c.vy), r2(c.st), r2(c.sw), r2(Math.max(0, c.tB)), r2(Math.max(0, c.tO)), r2(Math.max(0, c.tA)), r2(Math.max(0, c.tF)), r2(Math.max(0, c.tI)), r1(c.prog), flags | (c.fin << 4), p ? p.ack : 0, c.pts, r2(c.tW), r1(c.outT * 100) / 100, c.item | 0, r2(c.dc || 0)];
       });
       return { t: 's', k: this.tick, p: this.phase, cd: r2(this.cd), rt: r2(this.raceT), R: r1(this.R), rd: this.round, c, it: (this.cfg.items && this.world) ? this.world.snap() : undefined, e: this.events.length ? this.events.slice() : undefined };
     }
@@ -338,6 +338,6 @@
     }
   }
 
-  TT.room = { Room, PH, getTrack, MAX_CARS, NUM_COLORS, cleanName };
+  TT.room = { Room, PH, getTrack, MAX_CARS, NUM_COLORS, NUM_STYLES, cleanName };
   if (isNode) module.exports = TT.room;
 })(typeof window !== 'undefined' ? window : globalThis);

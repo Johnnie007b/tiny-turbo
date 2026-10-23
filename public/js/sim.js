@@ -6,9 +6,10 @@
   const DT = 1 / 60;
   const P = {
     MAXV: 380, REVMAX: 130, ENG: 560, BRK: 820, REVACC: 300,
-    TURN: 3.55, STEER_RATE: 9, GRIP: 6.2, CAR_R: 9, WHEEL_R: 8.5, WHEEL_OFF: 7.5,
+    TURN: 3.8, STEER_RATE: 12.5, GRIP: 6.9, CAR_SCALE: 1.33, CAR_R: 12, WHEEL_R: 11.3, WHEEL_OFF: 10,
     BOOST_T: 1.1, BOOST_V: 1.32, FALL_T: 0.95, INV_T: 1.6,
-    WALL_PAD: 14, ROUGH_BAND: 80, FALL_PAD: 6, BUMP_E: 0.8, RAM: 0.28
+    WALL_PAD: 14, ROUGH_BAND: 80, FALL_PAD: 6, BUMP_E: 0.9, RAM: 0.32,
+    DRIFT_T1: 0.6, DRIFT_T2: 1.3, DRIFT_T3: 2.1, DRIFT_MAX: 2.25
   };
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const wrapAngle = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
@@ -155,7 +156,7 @@
   function newCar(id) {
     return {
       id, x: 0, y: 0, a: 0, vx: 0, vy: 0, st: 0, sw: 0,
-      tB: 0, tO: 0, tA: 0, tF: 0, tI: 0, tW: 0, // boost, oil, air, fall, invuln, in-water flag
+      tB: 0, tO: 0, tA: 0, tF: 0, tI: 0, tW: 0, dc: 0, // boost, oil, air, fall, invuln, in-water flag, drift charge
       idx: -1, s: 0, lap: -1, prog: 0, d: 0, q: {}, airMax: 1,
       // meta
       out: false, fin: 0, finT: 0, lastLapT: 0, bestLap: 0, lapStart: 0, safeS: 0, ai: null, name: '', color: 0, style: 0, pts: 0, outT: 0, dist: 0, roll: 0
@@ -163,7 +164,7 @@
   }
   function setPose(T, c, s, d, lapBase) {
     const p = T.pos(s, d);
-    c.x = p.x; c.y = p.y; c.a = p.a; c.vx = 0; c.vy = 0; c.st = 0; c.sw = 0; c.tB = 0; c.tO = 0; c.tA = 0; c.tF = 0; c.idx = p.i;
+    c.x = p.x; c.y = p.y; c.a = p.a; c.vx = 0; c.vy = 0; c.st = 0; c.sw = 0; c.tB = 0; c.tO = 0; c.tA = 0; c.tF = 0; c.dc = 0; c.idx = p.i;
     const sn = ((s % T.L) + T.L) % T.L;
     c.s = sn; c.lap = Math.round((s - sn) / T.L) + (lapBase || 0); c.prog = c.lap * T.L + c.s;
   }
@@ -181,7 +182,7 @@
     const wrapped = (s < 0 ? -1 : 0);
     const prog = (lapShift + wrapped) * T.L + sn;
     const p = T.at(s);
-    c.x = p.x; c.y = p.y; c.a = p.a; c.vx = Math.cos(p.a) * 40; c.vy = Math.sin(p.a) * 40; c.st = 0; c.sw = 0; c.tB = 0; c.tO = 0; c.tA = 0; c.tF = 0;
+    c.x = p.x; c.y = p.y; c.a = p.a; c.vx = Math.cos(p.a) * 40; c.vy = Math.sin(p.a) * 40; c.st = 0; c.sw = 0; c.tB = 0; c.tO = 0; c.tA = 0; c.tF = 0; c.dc = 0;
     c.tI = P.INV_T; c.idx = p.i; c.s = sn; c.lap = lapShift + wrapped; c.prog = prog;
   }
 
@@ -190,11 +191,11 @@
     dt = dt || DT;
     if (c.tI > 0) c.tI -= dt;
     if (c.tF > 0) {
-      c.tF -= dt; c.x += c.vx * dt; c.y += c.vy * dt; c.vx *= (1 - 1.5 * dt); c.vy *= (1 - 1.5 * dt); c.a += 3 * dt;
+      c.dc = 0; c.tF -= dt; c.x += c.vx * dt; c.y += c.vy * dt; c.vx *= (1 - 1.5 * dt); c.vy *= (1 - 1.5 * dt); c.a += 3 * dt;
       if (c.tF <= 0) { c.tF = 0; respawn(T, c); }
       return;
     }
-    const air = c.tA > 0;
+    const air = c.tA > 0; if (air) c.dc = 0;
     // steering smoothing
     const target = clamp(inp.st || 0, -1, 1);
     const rate = P.STEER_RATE * dt;
@@ -214,7 +215,7 @@
     if (!air) {
       let steerGain = oil ? 0.3 : water ? 0.85 : rough ? 0.8 : 1;
       const spd = Math.abs(vF);
-      const sf = clamp(spd / 110, 0, 1) * (1.1 - 0.4 * clamp(spd / P.MAXV, 0, 1));
+      const sf = clamp(spd / 80, 0, 1) * (1.12 - 0.34 * clamp(spd / P.MAXV, 0, 1));
       const dir = vF >= -5 ? 1 : -1;
       c.a += c.st * P.TURN * sf * steerGain * dir * (hb ? 1.4 : 1) * dt;
     } else {
@@ -228,7 +229,7 @@
     if (!air) {
       // throttle / brake
       if (inp.g) {
-        const acc = P.ENG * Math.max(0, 1 - Math.max(vF, 0) / maxV) + (c.tB > 0 ? 520 : 0);
+        const acc = P.ENG * Math.max(0, 1 - Math.max(vF, 0) / maxV) + (c.tB > 0 ? 520 * clamp((maxV * 1.04 - vF) / (maxV * 0.25), 0, 1) : 0);
         vF += (vF < 0 ? acc + 500 : acc) * dt;
       } else {
         vF -= vF * (rough ? 1.6 : 0.55) * dt;
@@ -244,7 +245,26 @@
       let gk = P.GRIP * T.grip;
       if (Math.abs(c.st) > 0.55 && Math.abs(vF) > 240) gk *= 0.72;
       if (hb) { gk *= 0.2; vF -= vF * 0.25 * dt; }
+      else if (Math.abs(c.st) < 0.2) gk *= 1.25; // self-straightening when not steering
+      else if (c.st * vL > 0) gk *= 1.18; // counter-steer helps catch a slide
       if (oil) gk *= 0.1; else if (water) gk *= 0.6; else if (rough) gk *= 0.75;
+      // ---- drift charge: hold a slide to build a mini-turbo, release (straighten out) to cash it in
+      const aL = Math.abs(vL);
+      let drifting;
+      if (c.dc > 0) drifting = aL > 38 && vF > 130 && !oil && !water;
+      else drifting = aL > 62 && vF > (hb ? 140 : 170) && (Math.abs(c.st) > 0.35 || hb) && !oil && !water && !rough;
+      if (drifting) {
+        const before = c.dc; c.dc = Math.min(P.DRIFT_MAX, Math.max(c.dc, 0.001) + dt * clamp(aL / 110, 0.7, 1.4));
+        const t0 = before >= P.DRIFT_T3 ? 3 : before >= P.DRIFT_T2 ? 2 : before >= P.DRIFT_T1 ? 1 : 0;
+        const t1 = c.dc >= P.DRIFT_T3 ? 3 : c.dc >= P.DRIFT_T2 ? 2 : c.dc >= P.DRIFT_T1 ? 1 : 0;
+        if (t1 > t0 && evs) evs.push(['dtier', c.id, t1]);
+      } else if (c.dc > 0) {
+        const tier = c.dc >= P.DRIFT_T3 ? 3 : c.dc >= P.DRIFT_T2 ? 2 : c.dc >= P.DRIFT_T1 ? 1 : 0; c.dc = 0;
+        if (tier > 0) {
+          const bt = tier === 3 ? 1.2 : tier === 2 ? 0.9 : 0.55; if (c.tB < bt) c.tB = bt;
+          vF += 30 + tier * 25; evs && evs.push(['dboost', c.id, tier]);
+        }
+      }
       vL *= Math.exp(-gk * dt);
       c.vx = cs * vF - sn * vL; c.vy = sn * vF + cs * vL;
     } else {
@@ -297,8 +317,11 @@
           c.x = o.x + nxx * rr; c.y = o.y + nyy * rr;
           const vn = c.vx * nxx + c.vy * nyy;
           if (vn < 0) {
-            c.vx -= 1.45 * vn * nxx; c.vy -= 1.45 * vn * nyy; c.vx *= 0.93; c.vy *= 0.93;
-            if (-vn > 70) evs && evs.push(['bump', c.id]);
+            const im = -vn; const sl = 0.93 - 0.07 * clamp(im / 300, 0, 1);
+            c.vx -= 1.5 * vn * nxx; c.vy -= 1.5 * vn * nyy; c.vx *= sl; c.vy *= sl;
+            // glancing blows twist the car away from the prop
+            const cr = Math.cos(c.a) * nyy - Math.sin(c.a) * nxx; c.sw += clamp(cr * im * 0.012, -2.6, 2.6); if (im > 120) c.dc *= 0.3;
+            if (im > 70) evs && evs.push(['bump', c.id, Math.round(im)]);
           }
         }
       }
@@ -324,9 +347,13 @@
     c.x -= q.nx * sign * ex; c.y -= q.ny * sign * ex;
     const vn = (c.vx * q.nx + c.vy * q.ny) * sign; // outward component
     if (vn > 0) {
-      c.vx -= 1.35 * vn * q.nx * sign; c.vy -= 1.35 * vn * q.ny * sign;
-      c.vx *= 0.97; c.vy *= 0.97;
-      if (vn > 70) evs && evs.push(['wall', c.id]);
+      const nxo = q.nx * sign, nyo = q.ny * sign;
+      c.vx -= 1.3 * vn * nxo; c.vy -= 1.3 * vn * nyo;
+      // scrape: head-on hits lose more speed, glancing hits keep their momentum (but still rub)
+      const sl = 0.985 - 0.1 * clamp(vn / 260, 0, 1); c.vx *= sl; c.vy *= sl;
+      const cr = Math.cos(c.a) * nyo - Math.sin(c.a) * nxo; c.sw += -(cr >= 0 ? 1 : -1) * clamp(vn * 0.008, 0, 2.2) * Math.min(1, Math.abs(cr) * 2 + 0.3);
+      if (vn > 120) c.dc *= 0.3;
+      if (vn > 70) evs && evs.push(['wall', c.id, Math.round(vn)]);
     }
     c.d = sign * lim;
   }
@@ -362,7 +389,7 @@
               const cax = ax - a.x, cay = ay - a.y, cbx = bx - b.x, cby = by - b.y;
               a.sw += clamp((cax * dy - cay * dx) * J * 0.012, -3, 3);
               b.sw -= clamp((cbx * dy - cby * dx) * J * 0.012, -3, 3);
-              if (-vn > 60 && !hit) { hit = true; evs && evs.push(['car', a.id, b.id]); }
+              if (-vn > 60 && !hit) { hit = true; if (-vn > 140) { a.dc *= 0.4; b.dc *= 0.4; } evs && evs.push(['car', a.id, b.id, Math.round(-vn)]); }
             }
           }
         }

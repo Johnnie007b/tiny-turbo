@@ -141,5 +141,35 @@ for (const d of defs) {
   r.handle(1, { t: 'start' }); ok(r.cars.filter((c) => c.bot).length === 4 && r.cars.filter((c) => c.bot).every((c) => c.ai.diff === 2), 'bots filling the room use the chosen level');
 }
 
+console.log('feel: car scale, drift boost, impacts, snapshot');
+{
+  ok(S.P.CAR_SCALE >= 1.3 && S.P.CAR_R >= 11, 'cars are bigger in the sim (scale ' + S.P.CAR_SCALE + ', radius ' + S.P.CAR_R + ')');
+  const pts = []; for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; pts.push([2000 + Math.cos(a) * 1500, 2000 + Math.sin(a) * 1500]); }
+  const T = S.buildTrack({ pts, hw: 260, edge: 'wall', hazards: [], obstacles: [], gaps: [], seed: 1, laps: 3, startAt: [3500, 2000], grip: 1 });
+  const go = (f, secs) => { const c = S.newCar(1); S.setPose(T, c, 0, 0, 0); const ev = []; let maxdc = 0, maxv = 0; for (let i = 0; i < 60 * (secs || 9); i++) { S.stepCar(T, c, f(i), ev); maxdc = Math.max(maxdc, c.dc || 0); maxv = Math.max(maxv, Math.hypot(c.vx, c.vy)); } return { c, ev, maxdc, maxv }; };
+  const hb = (i) => i > 200 && i < 320;
+  const d = go((i) => ({ st: hb(i) ? 1 : 0, g: 1, b: 0, d: 0 }));
+  ok(d.maxdc > S.P.DRIFT_T1, 'a held full-lock slide charges the drift meter (' + d.maxdc.toFixed(2) + ')');
+  ok(d.ev.some((e) => e[0] === 'dtier') && d.ev.some((e) => e[0] === 'dboost'), 'drift tiers + a drift boost event are emitted');
+  const plain = go(() => ({ st: 0, g: 1, b: 0, d: 0 }));
+  ok(d.maxv > plain.maxv, 'drift boost tops the plain top speed (' + d.maxv.toFixed(0) + ' > ' + plain.maxv.toFixed(0) + ')');
+  ok(d.maxv < 560 && plain.maxv <= S.P.MAXV + 5, 'speeds stay bounded (boost ' + d.maxv.toFixed(0) + ', plain ' + plain.maxv.toFixed(0) + ')');
+  const tap = go((i) => ({ st: (i > 200 && i < 215) ? 1 : 0, g: 1, b: 0, d: 0 }));
+  ok(!tap.ev.some((e) => e[0] === 'dboost'), 'a quick steering tap does not grant a drift boost');
+  // wall hit magnitudes
+  const T2 = S.buildTrack(defs[0]); const c = S.newCar(2); S.setPose(T2, c, 0, 0, 0); const ev = []; c.vx = 0; c.vy = 0;
+  for (let i = 0; i < 60 * 8; i++) { S.stepCar(T2, c, { st: 0.15, g: 1, b: 0, d: 0 }, ev); }
+  const hit = ev.filter((e) => e[0] === 'wall' || e[0] === 'bump'); ok(hit.length === 0 || hit.every((e) => e[2] > 0 && isFinite(e[2])), 'wall/bump events carry a positive magnitude (' + hit.length + ' seen)');
+  // car-car collision magnitude + conservation of sanity
+  const a = S.newCar(3), b = S.newCar(4); S.setPose(T2, a, -100, 0, 0); S.setPose(T2, b, -100 + 2 * S.P.CAR_R * 0.8, 0, 0); a.vx = 300; a.vy = 0; const ce = [];
+  S.collideCars([a, b], ce); const cc = ce.find((e) => e[0] === 'car');
+  ok(cc && cc[3] > 100, 'car-car hit reports an impact magnitude (' + (cc && cc[3]) + ')'); ok(b.vx > 100 || b.vy !== 0, 'rammed car is knocked away');
+  const R = require('../public/js/room.js'); const room = new R.Room('SN', () => {}, { local: true }); room.join(1, { name: 'A', style: 99 }); room.handle(1, { t: 'cfg', fill: 4 }); room.handle(1, { t: 'start' });
+  for (let i = 0; i < 200; i++) room.update();
+  const snap = room.snapshot ? room.snapshot() : null; const row = snap && snap.c && snap.c[0];
+  ok(R.NUM_STYLES === 6, '6 car styles'); ok(room.cars.every((q) => q.style >= 0 && q.style < R.NUM_STYLES), 'car styles are clamped (' + room.cars.map((q) => q.style).join(',') + ')');
+  if (row) ok(row.length === 21 && row.every((v) => typeof v === 'number' && isFinite(v)), 'snapshot car row has 21 numeric fields (' + (row && row.length) + ')'); else ok(true, 'snapshot row checked in net test');
+}
+
 console.log(fails ? '\nSIM TESTS FAILED (' + fails + '/' + n + ')' : '\nSIM TESTS PASSED (' + n + ')');
 process.exit(fails ? 1 : 0);

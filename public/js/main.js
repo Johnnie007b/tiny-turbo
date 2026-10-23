@@ -11,8 +11,8 @@
   /* ------------------------------------------------------------ persistent settings / profile */
   const load = (k, d) => { try { return Object.assign({}, d, JSON.parse(localStorage.getItem(k) || '{}')); } catch (e) { return Object.assign({}, d); } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
-  const settings = load('tt_settings', { steer: 'buttons', auto: 0, cam: 'me', gfx: 'auto', fps: 0 });
-  const profile = load('tt_profile', { diff: 1, name: '', color: Math.floor(Math.random() * 12), style: Math.floor(Math.random() * 4) });
+  const settings = load('tt_settings', { steer: 'buttons', auto: 0, cam: 'me', gfx: 'auto', fps: 0, zoom: 'normal' });
+  const profile = load('tt_profile', { diff: 1, name: '', color: Math.floor(Math.random() * 12), style: Math.floor(Math.random() * 6) });
   if (!profile.name) profile.name = 'Racer' + (10 + Math.floor(Math.random() * 90));
 
   /* ------------------------------------------------------------ app state */
@@ -86,8 +86,8 @@
     for (let i = 0; i < 5; i++) {
       const t = mbT * (0.35 + i * 0.05) + i * 1.7; const A = cw * 0.42, B = ch * 0.36; const x = cw / 2 + Math.cos(t) * A, y = ch / 2 + Math.sin(t * 1.3 + i) * B;
       const dx = -Math.sin(t) * A, dy = Math.cos(t * 1.3 + i) * 1.3 * B; const a = Math.atan2(dy, dx);
-      const spr = G.carSprite(i % 4, (i * 3 + 1) % 12); const k = Math.max(0.8, cw / 600);
-      mctx.save(); mctx.translate(x + 3, y + 4); mctx.rotate(a); mctx.fillStyle = 'rgba(0,0,0,.35)'; mctx.fillRect(-16 * k, -8 * k, 32 * k, 16 * k); mctx.restore();
+      const spr = G.carSprite(i % 6, (i * 3 + 1) % 12); const k = Math.max(1.0, cw / 520);
+      mctx.save(); mctx.translate(x + 3, y + 4); mctx.rotate(a); const sh = G.carShadow(i % 6); mctx.globalAlpha = 0.8; mctx.drawImage(sh.cv, -sh.w / 2 * k, -sh.h / 2 * k, sh.w * k, sh.h * k); mctx.globalAlpha = 1; mctx.restore();
       mctx.save(); mctx.translate(x, y); mctx.rotate(a); mctx.drawImage(spr.cv, -20 * k, -12 * k, 40 * k, 24 * k); mctx.restore();
     }
   }
@@ -152,7 +152,7 @@
     S.leaving = true; stopPing(); stopReconnect(); clearTimeout(S.resultsTimer);
     if (S.ws) { const w = S.ws; S.ws = null; try { w.close(); } catch (e) { /* */ } }
     S.local = null; S.client = null; S.mode = null; S.paused = false; $('loading').classList.add('hidden');
-    resetSessionState(); IN.reset(); AU.engine(0, false, false); HUD.clear(); renderer.clearDecals();
+    resetSessionState(); IN.reset(); AU.engine(0, false, false); AU.setTempo(1); HUD.clear(); renderer.clearDecals();
     if (silent) return;
     S.view = 'menu'; setView('menu'); AU.music('menu'); showScreen('title'); S.leaving = false;
   }
@@ -182,16 +182,18 @@
   function bindSeg(id, key, conv, after) {
     const el = $(id); el.querySelectorAll('button').forEach((b) => { b.onclick = () => { AU.sfx('click'); settings[key] = conv(b.dataset.v); save('tt_settings', settings); syncSettings(); after && after(); }; });
   }
+  function markVol(id, v) { const bs = [...$(id).querySelectorAll('button')]; let best = null, bd = 9; for (const b of bs) { const d = Math.abs(+b.dataset.v - v); if (d < bd) { bd = d; best = b; } } bs.forEach((b) => b.classList.toggle('sel', b === best)); }
   function syncSettings() {
     const mark = (id, v) => $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('sel', b.dataset.v === String(v)));
-    mark('st-sfx', AU.state.sfx ? 1 : 0); mark('st-music', AU.state.music ? 1 : 0); mark('st-steer', settings.steer); mark('st-auto', settings.auto); mark('st-cam', settings.cam); mark('st-gfx', settings.gfx); mark('st-fps', settings.fps);
+    markVol('st-sfx', AU.state.sfx ? AU.state.sfxVol : 0); markVol('st-music', AU.state.music ? AU.state.musicVol : 0); mark('st-zoom', settings.zoom); mark('st-steer', settings.steer); mark('st-auto', settings.auto); mark('st-cam', settings.cam); mark('st-gfx', settings.gfx); mark('st-fps', settings.fps);
     IN.cfg.steerMode = settings.steer; IN.cfg.autoGas = !!settings.auto; updateTouchUI();
-    $('b-snd').classList.toggle('off', !AU.state.sfx && !AU.state.music); $('p-sfx').textContent = 'SOUND: ' + (AU.state.sfx ? 'ON' : 'OFF'); $('p-music').textContent = 'MUSIC: ' + (AU.state.music ? 'ON' : 'OFF');
+    $('b-snd').classList.toggle('off', !AU.state.sfx && !AU.state.music); $('p-sfx').textContent = 'SOUND: ' + (AU.state.sfx ? 'ON' : 'OFF'); $('p-music').textContent = 'MUSIC: ' + (AU.state.music ? 'ON' : 'OFF'); $('p-sfx').classList.toggle('off', !AU.state.sfx); $('p-music').classList.toggle('off', !AU.state.music);
   }
-  $('st-sfx').querySelectorAll('button').forEach((b) => { b.onclick = () => { AU.setSfx(b.dataset.v === '1'); AU.sfx('click'); syncSettings(); }; });
-  $('st-music').querySelectorAll('button').forEach((b) => { b.onclick = () => { AU.setMusic(b.dataset.v === '1'); syncSettings(); }; });
+  $('st-sfx').querySelectorAll('button').forEach((b) => { b.onclick = () => { AU.setSfxVol(+b.dataset.v); AU.sfx('click'); syncSettings(); }; });
+  $('st-music').querySelectorAll('button').forEach((b) => { b.onclick = () => { AU.setMusicVol(+b.dataset.v); if (+b.dataset.v > 0) AU.music(AU.now() || (S.view === 'game' ? raceTune() : 'menu')); syncSettings(); }; });
   bindSeg('st-steer', 'steer', String); bindSeg('st-auto', 'auto', Number); bindSeg('st-cam', 'cam', String);
-  bindSeg('st-gfx', 'gfx', String, () => { applyQuality(true); }); bindSeg('st-fps', 'fps', Number);
+  bindSeg('st-zoom', 'zoom', String); bindSeg('st-gfx', 'gfx', String, () => { applyQuality(true); }); bindSeg('st-fps', 'fps', Number);
+  const raceTune = () => AU.tuneFor(S.client && S.client.T ? S.client.T.theme : 'breakfast');
   function applyQuality(force) {
     const q = settings.gfx === 'high' ? 1 : settings.gfx === 'low' ? 0.65 : (force ? 1 : renderer.q);
     S.qualityLocked = settings.gfx !== 'auto'; renderer.lowFx = q < 0.85; renderer.maxParts = q < 0.85 ? 110 : 260; renderer.resize(q);
@@ -272,15 +274,15 @@
   function showResults() {
     const m = S.rm; if (!m || !m.res || S.screen === 'results') return; S.resultsShown = true; updateResults(); showScreen('results');
     const mine = m.res.find((r) => r.car === S.client.carId); const won = mine && mine.place === 1;
-    if (mine) AU.sfx(won ? 'win' : 'lose'); if (won) { const c = S.objs.get(S.client.carId); if (c) for (let i = 0; i < 4; i++) renderer.burst(c.x, c.y, 'confetti', 14); }
+    AU.music('results'); if (mine) AU.sfx(won ? 'win' : 'lose'); if (won) { const c = S.objs.get(S.client.carId); if (c) for (let i = 0; i < 4; i++) renderer.burst(c.x, c.y, 'confetti', 14); }
   }
   function updateResults() {
     const m = S.rm; if (!m || !m.res) return; const cl = S.client; const duel = m.cfg.mode === 'duel'; const mine = m.res.find((r) => r.car === cl.carId);
     $('r-title').textContent = !mine ? 'RESULTS' : mine.place === 1 ? 'YOU WIN!' : mine.place === 2 ? 'SO CLOSE!' : 'GOOD RACE!';
     const ol = $('r-list'); ol.innerHTML = '';
     for (const r of m.res) {
-      const li = document.createElement('li'); if (r.car === cl.carId) li.classList.add('me');
-      const pl = document.createElement('span'); pl.className = 'pl'; pl.textContent = r.place; li.appendChild(pl);
+      const li = document.createElement('li'); if (r.car === cl.carId) li.classList.add('me'); if (r.place <= 3 && (r.fin || duel)) li.classList.add('m' + r.place); li.style.setProperty('--i', ol.children.length);
+      const pl = document.createElement('span'); pl.className = 'pl'; pl.textContent = r.place === 1 && (r.fin || duel) ? '\u2605' : r.place; li.appendChild(pl);
       const c = document.createElement('canvas'); drawCarIcon(c, r.style, r.color); li.appendChild(c);
       const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = r.name + (r.bot ? ' (bot)' : ''); li.appendChild(nm);
       const tm = document.createElement('span'); tm.className = 'tm';
@@ -348,7 +350,7 @@
     clearTimeout(S.resultsTimer); S.resultsTimer = 0; S.resultsShown = false; S.paused = false;
     setView('game'); hideAllScreens(); updateTouchUI(); HUD.clear(); IN.reset();
     S.lastLapRt = 0; S.lastLap = 0; S.best = 0; S.camInit = false; S.lastCdN = 99; S.myPlace = 0; S.objs.clear();
-    AU.music('race');
+    AU.music(AU.tuneFor(cl.T.theme)); AU.setTempo(1); S.finalLap = false;
     const T = cl.T; S.lastTrack = cl.trackIdx;
     renderer.resize(); renderer.clearDecals();
     if (renderer.T !== T || !renderer.baked) { $('loading').classList.remove('hidden'); $('loading').querySelector('h2').textContent = 'LOADING...'; setTimeout(() => { try { renderer.setTrack(T); } catch (e) { console.error(e); toast('Graphics error: ' + e.message, 6000); } $('loading').classList.add('hidden'); }, 40); }
@@ -359,26 +361,31 @@
     const cl = S.client; if (!cl || S.view !== 'game') return; const type = e[0]; const id = e[1]; const mine = id === cl.carId;
     const o = S.objs.get(id); let vol = 1;
     if (o && !mine) { const cam = renderer.cam; const d = Math.hypot(o.x - cam.x, o.y - cam.y); vol = clamp(1 - d / 900, 0.1, 0.8); } else if (!o && !mine) vol = 0.15;
+    const impact = (mag) => clamp(((mag || 100) - 60) / 320, 0.08, 1);
+    const hitO = (oo) => { if (oo) oo.hitT = 0.3; };
+    const kick = (amt, col) => { renderer.shake = Math.max(renderer.shake, amt); renderer.flash = Math.max(renderer.flash || 0, amt * 0.55); renderer.flashCol = col || '255,60,40'; };
     switch (type) {
       case 'go': AU.sfx('go'); HUD.banner('GO!', '', '#6dff7a', 900); break;
       case 'round': renderer.clearDecals(); if (e[1] > 1) HUD.banner('ROUND ' + e[1], '', '#fff', 1200); S.lastCdN = 99; break;
-      case 'lap': if (mine) { const rt = cl.last ? cl.last.rt : 0; S.lastLapRt = rt; if (e[2] >= 1) { S.lastLap = e[3]; if (!S.best || e[3] < S.best) S.best = e[3]; const laps = cl.T.laps; if (S.rm.cfg.mode === 'race' && e[2] < laps) HUD.banner(e[2] + 1 === laps ? 'FINAL LAP!' : 'LAP ' + (e[2] + 1), HUD.fmt2(e[3]), '#ffd23f', 1500); AU.sfx('lap'); } } break;
-      case 'fin': if (mine) { HUD.banner(HUD.ORD[e[2] - 1] + ' PLACE!', HUD.fmt2(e[3]), e[2] === 1 ? '#ffd23f' : '#fff', 3000); AU.sfx('fin'); if (e[2] === 1 && o) for (let i = 0; i < 3; i++) renderer.burst(o.x, o.y, 'confetti', 14); } break;
-      case 'out': AU.sfx('out', vol); if (o) renderer.burst(o.x, o.y, 'boom', 18); if (mine) HUD.banner('KNOCKED OUT!', '', '#ff5a4a', 1500); break;
+      case 'lap': if (mine) { const rt = cl.last ? cl.last.rt : 0; S.lastLapRt = rt; if (e[2] >= 1) { S.lastLap = e[3]; if (!S.best || e[3] < S.best) S.best = e[3]; const laps = cl.T.laps; const fin = e[2] + 1 === laps; if (S.rm.cfg.mode === 'race' && e[2] < laps) HUD.banner(fin ? 'FINAL LAP!' : 'LAP ' + (e[2] + 1), HUD.fmt2(e[3]), '#ffd23f', 1500); if (fin && S.rm.cfg.mode === 'race') { AU.sfx('finallap'); AU.setTempo(1.1); S.finalLap = true; } else AU.sfx('lap'); } } break;
+      case 'fin': if (mine) { HUD.banner(HUD.ORD[e[2] - 1] + ' PLACE!', HUD.fmt2(e[3]), e[2] === 1 ? '#ffd23f' : '#fff', 3000); AU.sfx('fin'); AU.setTempo(1); if (e[2] === 1 && o) for (let i = 0; i < 3; i++) renderer.burst(o.x, o.y, 'confetti', 14); } break;
+      case 'out': AU.sfx('out', vol); if (o) renderer.burst(o.x, o.y, 'boom', 18); if (mine) { HUD.banner('KNOCKED OUT!', '', '#ff5a4a', 1500); kick(1); } break;
       case 'score': { const nm = who(id); HUD.banner(mine ? 'YOU SCORE!' : nm + ' SCORES!', S.rm.cfg.mode === 'duel' ? e[2] + ' / ' + S.rm.target : '', mine ? '#6dff7a' : '#ffd23f', 2100); AU.sfx('score'); break; }
-      case 'fall': AU.sfx('fall', vol); break;
-      case 'boost': AU.sfx('boost', vol); break;
-      case 'oil': AU.sfx('oil', vol); break;
-      case 'pick': AU.sfx('pick', vol); break;
+      case 'fall': AU.sfx('fall', vol); if (mine) vib(40); break;
+      case 'boost': AU.sfx('boost', vol); if (mine) { renderer.shake = Math.max(renderer.shake, 0.25); } break;
+      case 'oil': AU.sfx('oil', vol); if (o) renderer.burst(o.x, o.y, 'puff', 4); break;
+      case 'pick': AU.sfx('pick', vol); if (o) renderer.burst(o.x, o.y, 'spark', 6, null, 6, '#ffe66b'); break;
       case 'fire': AU.sfx(e[2] === 2 ? 'drop' : e[2] === 3 ? 'boost' : 'fire', vol); break;
-      case 'hit': AU.sfx('hit', vol); if (o) { renderer.burst(o.x, o.y, 'boom', 14); renderer.burst(o.x, o.y, 'spark', 8); } if (mine) { renderer.shake = Math.max(renderer.shake, 1); vib(60); HUD.banner('HIT!', '', '#ff5a4a', 900); } else if (e[2] === cl.carId) { HUD.banner('DIRECT HIT!', who(id), '#6dff7a', 900); } break;
+      case 'hit': AU.sfx('hit', vol); hitO(o); if (o) { renderer.burst(o.x, o.y, 'boom', 16); renderer.burst(o.x, o.y, 'spark', 10); renderer.burst(o.x, o.y, 'puff', 5); } if (mine) { kick(1.15); vib(70); HUD.banner('HIT!', '', '#ff5a4a', 900); } else if (e[2] === cl.carId) { HUD.banner('DIRECT HIT!', who(id), '#6dff7a', 900); } break;
       case 'pop': AU.sfx('pop', 0.4); break;
-      case 'splash': AU.sfx('splash', vol); if (o) renderer.burst(o.x, o.y, 'splash', 8); break;
-      case 'ramp': AU.sfx('ramp', vol); break;
-      case 'land': AU.sfx('land', vol); if (o) renderer.burst(o.x, o.y, 'puff', 5); break;
-      case 'bump': AU.sfx('bump', vol); if (mine) { renderer.shake = Math.max(renderer.shake, 0.6); vib(25); } break;
-      case 'wall': AU.sfx('wall', vol); if (o) renderer.burst(o.x, o.y, 'spark', 5, o.a + Math.PI / 2, 3); if (mine) { renderer.shake = Math.max(renderer.shake, 0.5); vib(20); } break;
-      case 'car': { AU.sfx('car', vol); const a = S.objs.get(e[1]), b = S.objs.get(e[2]); if (a && b) renderer.burst((a.x + b.x) / 2, (a.y + b.y) / 2, 'spark', 6); if (e[1] === cl.carId || e[2] === cl.carId) { renderer.shake = Math.max(renderer.shake, 0.7); vib(35); } break; }
+      case 'splash': AU.sfx('splash', vol); if (o) renderer.burst(o.x, o.y, 'splash', 10); break;
+      case 'ramp': AU.sfx('ramp', vol); if (o) renderer.burst(o.x, o.y, 'puff', 4); break;
+      case 'land': AU.sfx('land', vol); if (o) renderer.burst(o.x, o.y, 'puff', 6); if (mine) renderer.shake = Math.max(renderer.shake, 0.3); break;
+      case 'bump': { const m = impact(e[2]); AU.sfx('bump', vol, m); hitO(o); if (o) renderer.burst(o.x, o.y, 'spark', 2 + Math.round(m * 5)); if (mine) { renderer.shake = Math.max(renderer.shake, 0.25 + m * 0.7); vib(15 + m * 30); } break; }
+      case 'wall': { const m = impact(e[2]); AU.sfx('wall', vol, m); if (o) { renderer.burst(o.x, o.y, 'spark', 3 + Math.round(m * 8), o.a + Math.PI / 2, 3); if (m > 0.35) renderer.burst(o.x, o.y, 'puff', 3); } if (mine) { renderer.shake = Math.max(renderer.shake, 0.2 + m * 0.8); if (m > 0.5) kick(m * 0.6); vib(15 + m * 40); } break; }
+      case 'car': { const m = impact(e[3]); AU.sfx('car', vol, m); const a = S.objs.get(e[1]), b = S.objs.get(e[2]); hitO(a); hitO(b); if (a && b) { renderer.burst((a.x + b.x) / 2, (a.y + b.y) / 2, 'spark', 4 + Math.round(m * 9)); if (m > 0.4) renderer.burst((a.x + b.x) / 2, (a.y + b.y) / 2, 'puff', 4); } if (e[1] === cl.carId || e[2] === cl.carId) { renderer.shake = Math.max(renderer.shake, 0.3 + m * 0.8); vib(20 + m * 40); } break; }
+      case 'dtier': { if (mine) { AU.sfx('dtier', 1, e[2]); vib(10); } break; }
+      case 'dboost': { AU.sfx('dboost', vol, e[2]); if (o) { renderer.burst(o.x, o.y, 'spark', 6 + e[2] * 4, o.a + Math.PI, 2.5, ['#4db8ff', '#ff9a2a', '#d27bff'][clamp(e[2], 1, 3) - 1]); } if (mine) { renderer.shake = Math.max(renderer.shake, 0.2 + e[2] * 0.12); vib(20 + e[2] * 10); if (e[2] >= 2) HUD.banner(e[2] >= 3 ? 'ULTRA BOOST!' : 'MINI TURBO!', '', e[2] >= 3 ? '#d27bff' : '#ff9a2a', 700); } break; }
       default: break;
     }
   }
@@ -390,11 +397,11 @@
     const myId = cl.spectator ? -1 : cl.carId;
     for (const [id, st] of sm) {
       let o = S.objs.get(id); if (!o) { o = {}; S.objs.set(id, o); }
-      const inf = S.carInfo.get(id) || { name: 'Racer', color: id % 12, style: id % 4 };
-      o.item = st.item | 0; o.id = id; o.name = inf.name; o.color = inf.color; o.style = inf.style; o.bot = inf.bot;
+      const inf = S.carInfo.get(id) || { name: 'Racer', color: id % 12, style: id % 6 };
+      o.item = st.item | 0; o.dc = st.dc || 0; o.id = id; o.name = inf.name; o.color = inf.color; o.style = inf.style; o.bot = inf.bot;
       let src = st;
       if (id === myId && cl.me && cl.me._init && cl.phase === PH.RACING) {
-        const m = cl.me; o.x = m.x + cl.ox; o.y = m.y + cl.oy; o.a = m.a + cl.oa; o.vx = m.vx; o.vy = m.vy; o.tA = m.tA; o.tF = m.tF; o.tB = m.tB; o.tI = m.tI; o.tW = m.tW; o.st = m.st;
+        const m = cl.me; o.x = m.x + cl.ox; o.y = m.y + cl.oy; o.a = m.a + cl.oa; o.vx = m.vx; o.vy = m.vy; o.tA = m.tA; o.tF = m.tF; o.tB = m.tB; o.tI = m.tI; o.tW = m.tW; o.st = m.st; o.dc = m.dc || 0;
       } else { o.x = st.x; o.y = st.y; o.a = st.a; o.vx = st.vx; o.vy = st.vy; o.tA = st.tA; o.tF = st.tF; o.tB = st.tB; o.tI = st.tI; o.tW = st.tW; o.st = st.st; }
       o.prog = st.prog; o.pts = st.pts; o.outT = st.outT; o.out = !!(st.flags & 1); o.fin = st.flags >> 4; o.me = id === myId;
       if (id === myId && cl.me && cl.phase === PH.RACING) o.prog = cl.me.prog;
@@ -447,23 +454,26 @@
     if (duel && me && me.out && leader) focus = leader;
     const cam = renderer.cam; const sp = focus ? Math.hypot(focus.vx, focus.vy) : 0;
     let tx = focus ? focus.x + clamp(focus.vx * 0.28, -90, 90) : cam.x, ty = focus ? focus.y + clamp(focus.vy * 0.28, -90, 90) : cam.y;
-    let tsc = clamp(Math.min(W / 760, H / 460), 0.42, 1.6);
+    // bigger cars: the view shows ~600x365 world units (was 760x460); touch screens zoom in a bit more; settings can tweak it
+    const zk = settings.zoom === 'close' ? 1.15 : settings.zoom === 'wide' ? 0.84 : 1;
+    let tsc = clamp(Math.min(W / 600, H / 365) * (S.touchSeen ? 1.12 : 1) * zk, 0.5, 2.6);
     if (duel) tsc = Math.min(tsc, Math.min(W, H) / (2 * (snap.R + 60)));
-    tsc *= 1 - 0.08 * Math.min(1, sp / 330);
+    tsc *= 1 - 0.12 * Math.min(1, sp / 380) - (focus && focus.tB > 0 ? 0.04 : 0);
     if (!S.camInit && focus) { cam.x = tx; cam.y = ty; cam.sc = tsc; S.camInit = true; }
     else { const k = 1 - Math.exp(-(duel ? 7 : 9) * dt); cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.sc += (tsc - cam.sc) * (1 - Math.exp(-3 * dt)); }
-    renderer.shake *= Math.exp(-7 * dt);
+    renderer.shake *= Math.exp(-7 * dt); renderer.speedFx = me ? clamp((Math.hypot(me.vx, me.vy) - 400) / 140, 0, 1) * 0.9 + (me.tB > 0 ? 0.35 : 0) : 0;
+    for (const c of cars) if (c.hitT > 0) c.hitT = Math.max(0, c.hitT - dt);
     renderer.updateParts(dt); renderer.carFx(cars, dt);
     let danger = false; if (duel) for (const c of cars) if (c.outT > 0.05 && !c.out) danger = true;
     const itemsOn = !!(S.rm && S.rm.cfg.items && snap.it);
-    renderer.drawWorld({ cars, time: ts, items: itemsOn ? snap.it : null, missiles: itemsOn ? cl.sampleMissiles(S.missiles || (S.missiles = [])) : null, duel: duel && leader ? { leader, R: snap.R, danger } : null });
+    renderer.drawWorld({ dt, cars, time: ts, items: itemsOn ? snap.it : null, missiles: itemsOn ? cl.sampleMissiles(S.missiles || (S.missiles = [])) : null, duel: duel && leader ? { leader, R: snap.R, danger } : null });
     // name tags + me marker (device px)
     const ctx = renderer.ctx; const dpr = renderer.dpr; ctx.setTransform(1, 0, 0, 1, 0, 0);
     const tagS = Math.max(1, Math.round(dpr * (H < 420 ? 1 : 1.5)));
     for (const c of cars) {
       if (c.out && c !== me) continue; const p = renderer.w2s(c.x, c.y); const sx = p[0] * dpr, sy = p[1] * dpr;
       if (sx < -60 || sy < -60 || sx > renderer.cv.width + 60 || sy > renderer.cv.height + 60) continue;
-      const lift = (c.tA > 0 ? 14 : 0) * cam.sc * dpr; const y0 = sy - 26 * cam.sc * dpr - lift - tagS * 7;
+      const lift = (c.tA > 0 ? 14 : 0) * cam.sc * dpr; const y0 = sy - 31 * cam.sc * dpr - lift - tagS * 7;
       if (c.me) { const a = 5 * dpr; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(sx, y0 + tagS * 7); ctx.lineTo(sx - a - 2, y0 - a * 0.2 - 2); ctx.lineTo(sx + a + 2, y0 - a * 0.2 - 2); ctx.fill(); ctx.fillStyle = G.CAR_COLORS[c.color % 12].c; ctx.beginPath(); ctx.moveTo(sx, y0 + tagS * 6); ctx.lineTo(sx - a, y0); ctx.lineTo(sx + a, y0); ctx.fill(); }
       else if (cam.sc > 0.38) G.drawText(ctx, c.name, sx, y0, tagS, c.bot ? '#d6d9ee' : '#fff', 'center', 'rgba(0,0,0,.85)');
     }
@@ -471,7 +481,7 @@
     const raceT = snap.rt;
     const hs = {
       phase: snap.p, cd: snap.cd, raceT, T, mode, laps: T.laps, me, spectator: cl.spectator || !me, cars, order, total: cars.length, myPlace: S.myPlace, round: snap.rd, target: S.rm ? S.rm.target : 3,
-      lap: me ? Math.floor(me.prog / T.L) + 1 : 1, lastLap: S.lastLap, best: S.best, touch: S.touchSeen, online: S.mode === 'online', rtt: cl.rtt, fps: settings.fps ? S.fps + '' : '', safe: 0, items: itemsOn
+      speed: me ? Math.hypot(me.vx, me.vy) : 0, lap: me ? Math.floor(me.prog / T.L) + 1 : 1, lastLap: S.lastLap, best: S.best, touch: S.touchSeen, online: S.mode === 'online', rtt: cl.rtt, fps: settings.fps ? S.fps + '' : '', safe: 0, items: itemsOn
     };
     { const k = itemsOn ? (me ? me.item | 0 : 0) : -1; if (S._ib !== k) { S._ib = k; const ib = $('itemBtn'); ib.textContent = k > 0 ? ['', 'MISSILE', 'OIL', 'TURBO'][k] : 'ITEM'; ib.classList.toggle('empty', k <= 0); ib.style.display = k < 0 ? 'none' : ''; } }
     HUD.draw(renderer, hs);
@@ -483,7 +493,7 @@
     // countdown beeps
     if (snap.p === PH.COUNTDOWN) { const n = Math.ceil(snap.cd - 0.6); if (n !== S.lastCdN) { if (n >= 1) AU.sfx('beep'); S.lastCdN = n; } }
     // engine
-    if (me) { const spd = Math.hypot(me.vx, me.vy); AU.engine(clamp(spd / 330, 0, 1.2), me.tB > 0, snap.p === PH.RACING && !me.out && !me.fin && !S.paused && !S.screen); } else AU.engine(0, false, false);
+    if (me) { const spd = Math.hypot(me.vx, me.vy); const lat = Math.abs(-me.vx * Math.sin(me.a) + me.vy * Math.cos(me.a)); const live = snap.p === PH.RACING && !me.out && !me.fin && !S.paused && !S.screen; const air = me.tA > 0 || me.tF > 0; AU.engine(clamp(spd / 380, 0, 1.4), me.tB > 0, live, live && !air && IN.last && IN.last.g ? 1 : 0, live && !air && spd > 90 ? clamp((lat - 50) / 150, 0, 1) : 0); } else AU.engine(0, false, false, 0, 0);
     // keep results/pause overlays animating the world
   }
 
@@ -494,7 +504,7 @@
   const _setProf = setProfile; // refresh logo when car changes
   document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#sw-color,#sw-style')) drawLogo(); });
   // first user gesture unlocks audio + starts the menu tune
-  const unlockOnce = () => { AU.unlock(); AU.music(S.view === 'game' ? 'race' : 'menu'); };
+  const unlockOnce = () => { AU.unlock(); AU.music(S.view === 'game' ? raceTune() : 'menu'); };
   ['pointerdown', 'keydown', 'touchend'].forEach((ev) => window.addEventListener(ev, unlockOnce, { once: true, passive: true }));
   requestAnimationFrame(frame);
   // register for Add-to-Home-Screen friendliness (no offline caching: keeps updates simple)

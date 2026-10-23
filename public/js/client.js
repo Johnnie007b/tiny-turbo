@@ -68,7 +68,7 @@
       const old = { x: c.x, y: c.y, a: c.a };
       const hadState = this.me._init;
       c.x = row[1]; c.y = row[2]; c.a = row[3]; c.vx = row[4]; c.vy = row[5]; c.st = row[6]; c.sw = row[7];
-      c.tB = row[8]; c.tO = row[9]; c.tA = row[10]; c.tF = row[11]; c.tI = row[12]; c.prog = row[13]; c.tW = row[17];
+      c.tB = row[8]; c.tO = row[9]; c.tA = row[10]; c.tF = row[11]; c.tI = row[12]; c.prog = row[13]; c.tW = row[17]; c.dc = row[20] || 0;
       const fl = row[14]; c.out = !!(fl & 1); c.fin = fl >> 4; c.pts = row[16];
       c.lap = Math.floor(c.prog / T.L); c.s = c.prog - c.lap * T.L; c.idx = -1;
       const ack = row[15];
@@ -137,7 +137,7 @@
         o.x = teleport ? rb[1] : ra[1] + dx * ff + ra[4] * ext; o.y = teleport ? rb[2] : ra[2] + dy * ff + ra[5] * ext;
         o.a = ra[3] + wrapAngle(rb[3] - ra[3]) * ff + ra[7] * ext * 0.5;
         o.vx = ra[4] + (rb[4] - ra[4]) * ff; o.vy = ra[5] + (rb[5] - ra[5]) * ff;
-        o.st = ra[6]; o.tB = rb[8]; o.tO = rb[9]; o.tA = rb[10]; o.tF = rb[11]; o.tI = rb[12]; o.prog = ra[13] + (rb[13] - ra[13]) * ff; o.flags = rb[14]; o.pts = rb[16]; o.tW = rb[17]; o.outT = rb[18]; o.item = rb[19] | 0;
+        o.st = ra[6]; o.tB = rb[8]; o.tO = rb[9]; o.tA = rb[10]; o.tF = rb[11]; o.tI = rb[12]; o.prog = ra[13] + (rb[13] - ra[13]) * ff; o.flags = rb[14]; o.pts = rb[16]; o.tW = rb[17]; o.outT = rb[18]; o.item = rb[19] | 0; o.dc = rb[20] || 0;
         out.set(ra[0], o);
       }
       return out;

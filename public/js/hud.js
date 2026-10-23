@@ -89,10 +89,29 @@
     }
     // ---- duel warning
     if (s.mode === 'duel' && my && my.outT > 0 && !my.out) {
-      const f = clamp(my.outT / 0.55, 0, 1); const bw = sm * 70, bh = sm * 5, bx = cx - bw / 2, by = H - pad - bh - (s.touch ? Math.round(110 * dpr) : 0);
+      const f = clamp(my.outT / 0.55, 0, 1); const bw = sm * 70, bh = sm * 5, bx = cx - bw / 2, by = H - pad - bh - sm * 16 - (s.touch ? Math.round(110 * dpr) : 0);
       const flash = Math.floor(performance.now() / 120) % 2;
       txt('KEEP UP!', cx, by - md * 9, md, flash ? '#ff5a4a' : '#ffd23f', 'center');
       ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4); ctx.fillStyle = f > 0.6 ? '#ff3b30' : '#ffb21a'; ctx.fillRect(bx, by, bw * f, bh);
+    }
+    // ---- speed + drift charge meter (bottom centre)
+    if (my && s.phase === 2 && !my.out && !my.fin) {
+      const P = (TT.sim && TT.sim.P) || {}; const t1 = P.DRIFT_T1 || 0.6, t2 = P.DRIFT_T2 || 1.3, t3 = P.DRIFT_T3 || 2.1, tm = P.DRIFT_MAX || 2.25;
+      const bw = sm * 56, bh = sm * 3.4, bx = Math.round(cx - bw / 2), by = Math.round(H - pad - bh - (s.touch ? sm * 2 : 0));
+      const sp = clamp((s.speed || 0) / 430, 0, 1);
+      ctx.fillStyle = 'rgba(10,12,28,.7)'; ctx.fillRect(bx - sm, by - sm, bw + sm * 2, bh + sm * 2);
+      const gr = ctx.createLinearGradient(bx, 0, bx + bw, 0); gr.addColorStop(0, '#5df58a'); gr.addColorStop(0.65, '#ffd23f'); gr.addColorStop(1, '#ff5a4a'); ctx.fillStyle = gr; ctx.fillRect(bx, by, bw * sp, bh);
+      if (my.tB > 0) { ctx.globalAlpha = 0.5 + 0.4 * Math.sin(performance.now() / 50); ctx.fillStyle = '#fff'; ctx.fillRect(bx, by, bw * sp, bh * 0.4); ctx.globalAlpha = 1; }
+      const dc = my.dc || 0;
+      if (dc > 0.04) {
+        const dy = by - sm * 6; const tier = dc >= t3 ? 3 : dc >= t2 ? 2 : dc >= t1 ? 1 : 0;
+        const col = ['#8e96b8', '#4db8ff', '#ff9a2a', '#d27bff'][tier];
+        ctx.fillStyle = 'rgba(10,12,28,.7)'; ctx.fillRect(bx - sm, dy - sm, bw + sm * 2, bh + sm * 2);
+        ctx.fillStyle = col; ctx.fillRect(bx, dy, bw * clamp(dc / tm, 0, 1), bh);
+        if (tier === 3 && Math.floor(performance.now() / 90) % 2) { ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.5; ctx.fillRect(bx, dy, bw * clamp(dc / tm, 0, 1), bh * 0.45); ctx.globalAlpha = 1; }
+        ctx.fillStyle = 'rgba(255,255,255,.85)'; for (const tt of [t1, t2, t3]) ctx.fillRect(bx + Math.round(bw * tt / tm), dy - sm * 0.5, Math.max(1, Math.round(sm * 0.6)), bh + sm);
+        txt(tier ? ['', 'DRIFT', 'DRIFT+', 'MAX DRIFT!'][tier] : 'DRIFT', cx, dy - sm * 8, sm, col, 'center');
+      }
     }
     // ---- banners
     const now = performance.now();

@@ -40,6 +40,16 @@ The server prints the local URL and your LAN URLs, for example `http://192.168.1
   - **TURBO**: a burst of extra speed.
 - Duel mode defaults to ITEMS OFF (pure ramming) and can be switched on in the lobby.
 
+### Upgrades (v2)
+- **Bigger cars, tighter camera.** Cars are about 1.7x bigger on desktop and ~1.9x on phones. A speed-based zoom-out keeps fast driving readable. Settings has a **Camera zoom** option (wide / normal / close).
+- **Six distinct car styles** (pick on the title screen or in the lobby), each with soft cached shadows.
+- **Themed track art.** Each track has baked decor (cereal and syrup at breakfast, bolts and tools on the workbench, shells and toys in the sandbox, bubbles and ducks in the bathtub).
+- **Effects.** Tire marks, dust, water splash and spark particles, hit screen-shake, speed lines and boost flashes.
+- **Drift boost.** Hold a slide to charge three tiers (mini, super, ultra). Release for a speed burst. The HUD shows a speed bar and a drift meter.
+- **Crash feedback.** Shake, sparks, flash and phone vibration scale with how hard you hit.
+- **Audio.** A chiptune loop per track plus menu and results tunes, a speed-dependent engine sound, and extra sound effects. Music and SFX each have OFF / LOW / MED / HIGH, saved in your browser. The music speeds up on the final lap.
+- **Quality setting** (auto / high / low) for mid-range phones.
+
 ## Controls
 
 ### PC (keyboard)
@@ -67,7 +77,7 @@ Landscape works best. A portrait hint appears, and you can dismiss it.
 - `public/js/room.js`: the room and match logic (lobby, countdown, race, duel, items, bots). The server runs it for online games, and the browser runs the same code locally for solo play.
 - The server is **authoritative**. Clients send inputs, the server sends compact snapshots at 30 Hz. The local car is predicted and reconciled, and other cars are interpolated.
 - `items.js`, `ai.js`, `tracks.js`: items and weapons, bot drivers, and track definitions.
-- `render.js`, `gfx.js`, `hud.js`, `audio.js`, `input.js`, `main.js`: renderer, procedural sprites, HUD, chiptune audio, input and UI.
+- `render.js`, `gfx.js`, `decor.js`, `hud.js`, `audio.js`, `input.js`, `main.js`: renderer, procedural sprites, HUD, chiptune audio, input and UI.
 
 ## Tests
 ```bash
@@ -75,6 +85,7 @@ npm test             # runs all three suites
 npm run test:sim     # physics, hazards, ramming, items/weapons, bots and bot difficulty (fast)
 npm run test:net     # real WebSocket server + 4 simulated clients with latency/jitter, a full race, rematch, rejoin, duel (about 4 min)
 npm run test:mobile  # headless Chrome via Playwright: phone landscape + portrait + desktop in one room, touch/keyboard, screenshots in test/shots/
+node test/screens.js [track]   # autopilot screenshot tour (desktop + phone) into test/shots/tour-*.png
 ```
 The mobile suite needs Chrome or Chromium (`npx playwright install chromium` if there is no system Chrome).
 

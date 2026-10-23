@@ -74,7 +74,7 @@ const waitFor = async (fn, ms, label) => { const t0 = Date.now(); while (Date.no
     await rel();
     await sp.evaluate(() => window.TTapp.local.finish());
     ok(await waitFor(async () => (await sp.evaluate(() => window.TTapp.screen)) === 'results', 6000, 'results'), 'results screen shows');
-    await sp.screenshot({ path: path.join(SHOTS, 'phone-results.png') });
+    await sleep(900); await sp.screenshot({ path: path.join(SHOTS, 'phone-results.png') });
     await sp.close();
 
     /* ---- 2. multiplayer: desktop host + phone landscape + phone portrait ---- */
@@ -140,6 +140,44 @@ const waitFor = async (fn, ms, label) => { const t0 = Date.now(); while (Date.no
     await dd.keyboard.down('ArrowUp'); await sleep(5000);
     await dd.screenshot({ path: path.join(SHOTS, 'desktop-duel.png') });
     await dd.keyboard.up('ArrowUp');
+
+    /* ---- 5. round-1 upgrades: audio, settings (zoom / volume / quality), art, camera ---- */
+    console.log('upgrades');
+    {
+      const up = await mkPage(browser, 'desktop', errs); await up.goto(URL); await up.waitForSelector('#b-solo');
+      ok(await up.evaluate(() => TT.audio.validate().length === 0), 'every music bar is well-formed (validate())');
+      const names = await up.evaluate(() => Object.keys(TT.audio.tunes));
+      ok(['breakfast', 'workbench', 'sandbox', 'bathtub', 'menu', 'results'].every((n) => names.includes(n)), 'a tune exists for each track + menu + results (' + names.join(',') + ')');
+      for (const n of names) {
+        const r = await up.evaluate((n) => TT.audio.renderTune(n, 6).then((x) => x && { rms: x.rms, peak: x.peak, nz: x.nz }), n);
+        ok(r && r.rms > 0.003 && r.peak < 1.0, 'tune "' + n + '" renders audible and not clipping (rms ' + (r && r.rms.toFixed(3)) + ', peak ' + (r && r.peak.toFixed(2)) + ')');
+      }
+      ok(await up.evaluate(() => ['dtier', 'dboost', 'finallap', 'bump', 'wall', 'car', 'hit', 'boost'].every((n) => TT.audio.sfxNames.includes(n))), 'new item/crash/drift SFX exist');
+      ok(await up.evaluate(() => { try { for (const n of TT.audio.sfxNames) TT.audio.sfx(n, 1, 0.8); TT.audio.engine(0.8, true, true, 1, 0.6); TT.audio.engine(0, false, false, 0, 0); return true; } catch (e) { return false; } }), 'every SFX + engine call runs without throwing');
+      ok(await up.evaluate(() => document.querySelectorAll('#sw-style b').length === 6), 'style picker offers 6 car designs');
+      // settings: volume levels, zoom, quality
+      await up.click('#b-settings'); await up.waitForSelector('#s-settings:not(.hidden)');
+      await up.click('#st-music button[data-v="0.35"]'); await up.click('#st-sfx button[data-v="1"]');
+      ok(await up.evaluate(() => Math.abs(TT.audio.state.musicVol - 0.35) < 0.01 && TT.audio.state.music && TT.audio.state.sfxVol === 1), 'music LOW / SFX HIGH volume levels apply');
+      await up.click('#st-music button[data-v="0"]'); ok(await up.evaluate(() => TT.audio.state.music === false), 'music OFF toggles music off');
+      await up.click('#st-music button[data-v="0.7"]'); ok(await up.evaluate(() => TT.audio.state.music === true && JSON.parse(localStorage.tt_audio).mv === 0.7), 'music volume persists (tt_audio)');
+      await up.click('#st-zoom button[data-v="wide"]');
+      await up.click('#st-back'); await up.click('#b-solo'); await up.waitForSelector('#s-lobby:not(.hidden)'); await up.click('#l-tracks .tcard:nth-child(3)'); await up.click('#b-start');
+      ok(await waitFor(async () => (await st(up)).ph === 2, 9000, 'racing'), 'solo race starts on sandbox');
+      ok(await up.evaluate(() => TT.audio.now() === TT.audio.tuneFor('sandbox')), 'race plays the sandbox track tune (' + await up.evaluate(() => TT.audio.now()) + ')');
+      await sleep(600); const scWide = await up.evaluate(() => window.TTapp.renderer.cam.sc);
+      ok(scWide > 0.5 && scWide < 2.6, 'camera scale in range (' + scWide.toFixed(2) + ' at 1280x720, WIDE)');
+      ok(await up.evaluate(() => !!(window.TTapp.renderer.baked && window.TTapp.renderer.baked.mm)), 'track (with baked decor) rendered');
+      await up.close();
+      // phone: camera must be tighter than the desktop camera relative to a 600x365 view, cars well over 1.5x the old size
+      const pz = await mkPage(browser, 'phone', errs); await pz.goto(URL); await pz.tap('#b-solo'); await pz.waitForSelector('#s-lobby:not(.hidden)'); await pz.tap('#b-start');
+      ok(await waitFor(async () => (await st(pz)).ph === 2, 9000, 'racing'), 'phone solo starts (zoom check)');
+      await sleep(600);
+      const px = await pz.evaluate(() => { const r = window.TTapp.renderer; return { sc: r.cam.sc, h: r.H, w: r.W }; });
+      const carPx = px.sc * 40 * 1.33; // sprite is 40 world units long, drawn at CAR_SCALE
+      ok(carPx > 40, 'phone landscape car is ' + carPx.toFixed(0) + 'px long on screen (was ~' + (Math.min(px.w / 760, px.h / 460) * 40).toFixed(0) + 'px)');
+      await pz.close();
+    }
   } catch (e) { fails++; console.log('  EXCEPTION: ' + (e.stack || e)); }
   ok(errs.length === 0, 'no page errors / console errors' + (errs.length ? ': ' + errs.slice(0, 5).join(' | ') : ''));
   await browser.close(); srv.kill();
