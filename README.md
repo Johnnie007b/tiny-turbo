@@ -90,5 +90,7 @@ Share that `https://…trycloudflare.com` link. Phones and PCs anywhere can join
 
 **Permanent hosting:** deploy the repo to any Node host with WebSocket support (Render, Fly.io, Railway, a VPS and so on). The start command is `npm start`. It listens on `$PORT` and `0.0.0.0`.
 
+**Live demo / Render:** this repo is deployed on Render's free plan (build `npm ci --omit=dev`, start `npm start`, health check `/healthz`). Free services sleep after about 15 minutes idle and take roughly 30 to 60 seconds to wake on the next visit. Smoke-test a deployment with `node test/live.test.js wss://YOUR-HOST/ws`.
+
 ## Credits
 Made by John. Original art and audio, generated in code. Not affiliated with any commercial racing game.
